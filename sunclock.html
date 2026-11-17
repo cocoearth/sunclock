@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>앙부일구 시뮬레이션</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Nanum+Myeongjo:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f1e7; --paper:#fffdf8; --ink:#2b2622; --muted:#7a6f63; --line:#d9cfbf;
+    --accent:#b5452b; --accent2:#2f6a73; --head:#f1e6d6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,sans-serif;}
+  header{padding:18px 24px 6px}
+  h1{font-family:"Nanum Myeongjo",serif;font-size:26px;margin:0;letter-spacing:-.5px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:14px}
+  .wrap{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:18px;padding:14px 24px 28px}
+  @media (max-width:900px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px}
+  #stageCard{padding:10px;position:relative}
+  canvas{width:100%;height:auto;display:block;border-radius:10px;touch-action:none;cursor:grab}
+  canvas:active{cursor:grabbing}
+  .camBtns{position:absolute;top:18px;right:18px;display:flex;gap:6px}
+  .camBtns button{font-size:12px;padding:5px 9px}
+  .hint{font-size:12px;color:var(--muted);margin:6px 6px 0}
+  .controls{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;font-size:14px}
+  .controls label{color:var(--muted);font-size:13px}
+  input[type=date],input[type=number]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+  .row{display:flex;gap:8px;align-items:center}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .timeBig{font-weight:700;font-size:18px;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+  button{font:inherit;font-size:13px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--ink)}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  h2{font-size:15px;margin:18px 0 8px;font-weight:700}
+  h2:first-child{margin-top:0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border-top:1px solid #8b8076;border-bottom:1px solid #8b8076;padding:9px 10px;text-align:center}
+  th{background:var(--head);width:38%;font-weight:700}
+  td{font-variant-numeric:tabular-nums}
+  .ans{transition:filter .2s}
+  body.student .ans{filter:blur(6px);cursor:pointer;user-select:none}
+  body.student .ans.show{filter:none}
+  .note{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:10px}
+  .reading{background:#fbf3e9;border:1px solid #ecd9c2;border-radius:10px;padding:10px 12px;font-size:14px;line-height:1.7;margin-top:12px}
+  .reading b{color:var(--accent)}
+  .toggle{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}
+  .warn{color:var(--accent);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <h1>앙부일구(仰釜日晷) 시뮬레이션</h1>
+  <p>날짜와 시각을 정하면 영침 그림자가 어디에 생기는지 보여 줘요. 그림자 끝으로 절기와 시태양시를 읽고 표준시로 고쳐 보세요.</p>
+</header>
+
+<div class="wrap">
+  <div class="card" id="stageCard">
+    <canvas id="cv" width="900" height="760"></canvas>
+    <div class="camBtns">
+      <button data-cam="south">남쪽에서</button>
+      <button data-cam="top">위에서</button>
+      <button data-cam="east">동쪽에서</button>
+    </div>
+    <div class="hint">끌어서 돌려 볼 수 있어요. <span style="color:#b5452b">●</span> 그림자 끝 · <span style="color:#2f6a73">━</span> 오늘이 속한 두 절기선 · 가로로 휜 선은 절기선, 세로선은 시각선(15분 = 1각)</div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="controls">
+        <label>날짜</label><input type="date" id="date">
+        <label>시각</label>
+        <div class="row"><input type="range" id="time" min="300" max="1200" step="1"><span class="timeBig" id="timeLbl"></span></div>
+        <label>위도 (°N)</label><input type="number" id="lat" step="0.01">
+        <label>경도 (°E)</label><input type="number" id="lon" step="0.01">
+      </div>
+      <div class="btns">
+        <button class="primary" id="play">▶ 하루 재생</button>
+        <button id="preset">오늘 오후 2시</button>
+        <button id="now">지금 시각</button>
+        <label class="toggle"><input type="checkbox" id="student"> 학생용 (답 가리기)</label>
+      </div>
+      <div class="reading" id="reading"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>1. 해시계로 읽은 날짜와 시각</h2>
+      <table>
+        <tr><th>절기(날짜)</th><td colspan="3"><span class="ans" id="aSol"></span></td></tr>
+        <tr><th>시각(시태양시)</th><td colspan="3"><span class="ans" id="aApp"></span></td></tr>
+        <tr><th>위도</th><td><span id="aLat"></span></td><th style="width:auto">경도</th><td><span id="aLon"></span></td></tr>
+        <tr><th>경도 보정값</th><td colspan="3"><span class="ans" id="aLonC"></span></td></tr>
+        <tr><th>균시차 보정값</th><td colspan="3"><span class="ans" id="aEot"></span></td></tr>
+        <tr><th>표준시</th><td colspan="3"><span class="ans" id="aStd"></span></td></tr>
+      </table>
+      <h2>2. 관측 당시의 실제 날짜와 시각</h2>
+      <table>
+        <tr><th>실제 날짜와 시각</th><td><span id="aReal"></span></td></tr>
+      </table>
+      <div class="note">
+        · 경도 보정값 = (135° − 경도) × 4분. 우리나라는 표준 자오선(135°E)보다 서쪽에 있어서 더해요.<br>
+        · 균시차 = 시태양시 − 평균태양시. 해시계가 빠르면(+) 그만큼 빼요. 11월 초에는 약 +16분으로 일 년 중 가장 커요.<br>
+        · 표준시 = 시태양시 + 경도 보정값 + 균시차 보정값<br>
+        · 학생용 모드에서 가려진 답을 누르면 하나씩 보여요.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const D2R = Math.PI/180, R2D = 180/Math.PI;
+const EPS = 23.44;
+const $ = id => document.getElementById(id);
+
+// 24절기: 태양 황경 0°=춘분 부터 15° 간격
+const TERMS = ["춘분","청명","곡우","입하","소만","망종","하지","소서","대서","입추","처서","백로",
+               "추분","한로","상강","입동","소설","대설","동지","소한","대한","입춘","우수","경칩"];
+const termDec = i => Math.asin(Math.sin(EPS*D2R)*Math.sin(i*15*D2R))*R2D;
+
+// 시각 이름 (초·정)
+const BRANCH = ["자","축","인","묘","진","사","오","미","신","유","술","해"];
+function sijin(hourFloat){
+  // 정(正) = 짝수 시 정각 기준: 자정 0, 축정 2 ... 오정 12
+  let h = ((hourFloat % 24) + 24) % 24;
+  let base = Math.floor(h);              // 정수 시
+  let idx = Math.floor(((base+1)%24)/2); // 23,0 -> 자 / 1,2 -> 축 ...
+  let cho = (base % 2 === 1);            // 홀수 시 = 초(初)
+  return {name: BRANCH[idx] + (cho?"초":"정"), base};
+}
+
+// ---------- 태양 위치 ----------
+function sun(dateUTCms, latDeg, lonDeg){
+  const n = dateUTCms/86400000 + 2440587.5 - 2451545.0;
+  const L = (280.460 + 0.9856474*n) % 360;
+  const g = (357.528 + 0.9856003*n) * D2R;
+  let lam = L + 1.915*Math.sin(g) + 0.020*Math.sin(2*g);
+  lam = ((lam%360)+360)%360;
+  const eps = (23.439 - 0.0000004*n)*D2R;
+  const RA = Math.atan2(Math.cos(eps)*Math.sin(lam*D2R), Math.cos(lam*D2R))*R2D;
+  const dec = Math.asin(Math.sin(eps)*Math.sin(lam*D2R))*R2D;
+  let diff = ((L - RA) % 360 + 540) % 360 - 180;
+  const eot = diff*4; // 분, 시태양시 − 평균태양시
+  const gmst = 280.46061837 + 360.98564736629*n;
+  let H = ((gmst + lonDeg - RA) % 360 + 540) % 360 - 180; // 시간각
+  return {lam, dec, eot, H};
+}
+
+// 지평 좌표(x=동, y=북, z=천정) 단위벡터
+function dirFromHD(Hdeg, decDeg, latDeg){
+  const H=Hdeg*D2R, d=decDeg*D2R, p=latDeg*D2R;
+  return [ -Math.cos(d)*Math.sin(H),
+           Math.sin(d)*Math.cos(p) - Math.cos(d)*Math.cos(H)*Math.sin(p),
+           Math.sin(d)*Math.sin(p) + Math.cos(d)*Math.cos(H)*Math.cos(p) ];
+}
+// 해가 (H,δ)에 있을 때 영침 끝(구 중심) 그림자 = −ŝ
+const shadowPt = (H,d,lat) => dirFromHD(H,d,lat).map(v=>-v);
+
+// ---------- 카메라 ----------
+const cv = $("cv"), ctx = cv.getContext("2d");
+let camAz = 180, camEl = 52; // 카메라 위치: 방위(북=0, 시계방향), 고도
+let W=900, Hh=760, S=300, CX=450, CY=330;
+function resize(){
+  const r = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio||1;
+  W = r.width; Hh = r.width*0.84;
+  cv.width = W*dpr; cv.height = Hh*dpr; cv.style.height = Hh+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  S = Math.min(W,Hh)*0.40; CX = W/2; CY = Hh*0.42;
+  draw();
+}
+function basis(){
+  const t=camAz*D2R, e=camEl*D2R;
+  const c=[Math.sin(t)*Math.cos(e), Math.cos(t)*Math.cos(e), Math.sin(e)];
+  const r=[-Math.cos(t), Math.sin(t), 0];
+  const u=[c[1]*r[2]-c[2]*r[1], c[2]*r[0]-c[0]*r[2], c[0]*r[1]-c[1]*r[0]];
+  return {c,r,u};
+}
+let B = basis();
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const proj = P => [CX + S*dot(P,B.r), CY - S*dot(P,B.u)];
+// 그릇 안의 점 Q가 보이는지: 카메라 쪽 시선이 테두리 안쪽(입구)으로 빠져나가면 보임
+const seen = Q => {
+  if(Q[2] >= 0) return true;
+  if(B.c[2] <= 0.001) return false;
+  const s0 = -Q[2]/B.c[2];
+  const x = Q[0]+s0*B.c[0], y = Q[1]+s0*B.c[1];
+  return x*x+y*y < 1;
+};
+const visIn = P => P[2] <= 0.0001 && seen(P.map(v=>v*0.995));   // 그릇 안쪽 면 중 보이는 곳
+
+// ---------- 상태 ----------
+const state = { y:2026, m:11, d:17, min:14*60, lat:37.49, lon:127.06 };
+
+function polyline(pts, style, width, dash){
+  ctx.strokeStyle=style; ctx.lineWidth=width; ctx.setLineDash(dash||[]);
+  ctx.beginPath(); let on=false;
+  for(const P of pts){
+    if(P && visIn(P)){ const [x,y]=proj(P); on?ctx.lineTo(x,y):ctx.moveTo(x,y); on=true; }
+    else on=false;
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+function draw(){
+  B = basis();
+  const lat = state.lat;
+  ctx.clearRect(0,0,W,Hh);
+
+  // 받침대 그림자
+  ctx.fillStyle="rgba(60,40,20,.10)";
+  ctx.beginPath(); ctx.ellipse(CX, CY+S*1.18, S*0.9, S*0.16, 0, 0, 2*Math.PI); ctx.fill();
+
+  // 다리 4개 (방위 45°,135°...)
+  for(const a of [45,135,225,315]){
+    const top=[Math.sin(a*D2R)*0.62, Math.cos(a*D2R)*0.62, -0.72];
+    const bot=[Math.sin(a*D2R)*0.95, Math.cos(a*D2R)*0.95, -1.25];
+    if(dot(top,B.c) < -0.3) continue; // 뒤쪽 다리는 생략에 가깝게
+    const [x1,y1]=proj(top),[x2,y2]=proj(bot);
+    ctx.strokeStyle="#5b3e26"; ctx.lineWidth=S*0.045; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+
+  // 그릇 바깥면 (아래쪽 반원)
+  const rimPts=[]; for(let i=0;i<=120;i++){const t=i/120*2*Math.PI; rimPts.push(proj([Math.cos(t),Math.sin(t),0]));}
+  const g1 = ctx.createLinearGradient(CX-S,CY,CX+S,CY+S);
+  g1.addColorStop(0,"#8a5a2b"); g1.addColorStop(.5,"#6b4320"); g1.addColorStop(1,"#3f2712");
+  ctx.fillStyle=g1;
+  ctx.beginPath();
+  // 실루엣 아래 반원: t∈[π,2π] → cos t·r + sin t·u
+  for(let i=0;i<=80;i++){
+    const t=Math.PI + i/80*Math.PI;
+    const P=[Math.cos(t)*B.r[0]+Math.sin(t)*B.u[0], Math.cos(t)*B.r[1]+Math.sin(t)*B.u[1], Math.cos(t)*B.r[2]+Math.sin(t)*B.u[2]];
+    const [x,y]=proj(P); i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath(); rimPts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.fill();
+
+  // 안쪽 면
+  const g2 = ctx.createRadialGradient(CX, CY+S*0.25, S*0.05, CX, CY, S*1.05);
+  g2.addColorStop(0,"#f3e6c9"); g2.addColorStop(.7,"#e3cfa6"); g2.addColorStop(1,"#c9ad7c");
+  ctx.fillStyle=g2;
+  ctx.beginPath(); rimPts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.fill();
+
+  // 태양 계산
+  const ms = Date.UTC(state.y, state.m-1, state.d, 0, state.min) - 9*3600000;
+  const s = sun(ms, lat, state.lon);
+  const sDir = dirFromHD(s.H, s.dec, lat);
+  const up = sDir[2] > 0;
+  const curIdx = Math.floor(s.lam/15); // 지난 절기
+  const decA = termDec(curIdx), decB = termDec((curIdx+1)%24);
+
+  // 절기선 (13개)
+  const drawn = new Set();
+  for(let i=0;i<24;i++){
+    const d = Math.round(termDec(i)*100)/100;
+    if(drawn.has(d)) continue; drawn.add(d);
+    const pts=[]; for(let H=-150;H<=150;H+=1) pts.push(shadowPt(H,d,lat));
+    const main = (i===0||i===6||i===18);
+    polyline(pts, main?"#6d5640":"#8f7a62", main?1.6:0.9);
+  }
+  // 오늘이 속한 두 절기선 강조
+  for(const d of [decA,decB]){
+    const pts=[]; for(let H=-150;H<=150;H+=1) pts.push(shadowPt(H,d,lat));
+    polyline(pts, "#2f6a73", 2.4);
+  }
+  // 오늘 태양 적위선 (점선)
+  { const pts=[]; for(let H=-150;H<=150;H+=1) pts.push(shadowPt(H,s.dec,lat));
+    polyline(pts,"rgba(181,69,43,.55)",1.2,[4,4]); }
+
+  // 시각선 (15분 간격), 영역은 동지~하지
+  for(let m=4*60; m<=20*60; m+=15){
+    const H=(m/60-12)*15;
+    const pts=[]; for(let d=-EPS; d<=EPS+0.01; d+=0.5) pts.push(shadowPt(H,d,lat));
+    const isHour = m%60===0;
+    polyline(pts, isHour?"#4a3726":"#9c876d", isHour?1.5:0.6);
+  }
+
+  // 시각 이름 라벨 (동지선 바깥쪽)
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(let h=5; h<=19; h++){
+    const P=shadowPt((h-12)*15, -EPS-4.5, lat);
+    if(!visIn(P)) continue;
+    const [x,y]=proj(P);
+    ctx.fillStyle="#3b2a1c"; ctx.font=`700 ${Math.max(10,S*0.045)}px "Nanum Myeongjo",serif`;
+    ctx.fillText(sijin(h).name, x, y);
+    ctx.fillStyle="#8a7660"; ctx.font=`${Math.max(8,S*0.03)}px "Noto Sans KR",sans-serif`;
+    ctx.fillText(h+"시", x, y+S*0.045);
+  }
+  // 절기 라벨: 오정선 근처
+  const lab = (d, txt, col, bold) => {
+    const P=shadowPt(-7.5, d, lat); if(!visIn(P)) return;
+    const [x,y]=proj(P);
+    ctx.font=`${bold?700:500} ${Math.max(9,S*0.034)}px "Noto Sans KR",sans-serif`;
+    ctx.fillStyle="rgba(255,253,248,.8)";
+    const w=ctx.measureText(txt).width+6; ctx.fillRect(x-w/2,y-S*0.024,w,S*0.048);
+    ctx.fillStyle=col; ctx.fillText(txt,x,y);
+  };
+  lab(-EPS,"동지","#6d5640"); lab(0,"춘분·추분","#6d5640"); lab(EPS,"하지","#6d5640");
+  lab(decA, TERMS[curIdx], "#2f6a73", true);
+  lab(decB, TERMS[(curIdx+1)%24], "#2f6a73", true);
+
+  // 테두리(지평) & 방위
+  ctx.strokeStyle="#3d2614"; ctx.lineWidth=S*0.028;
+  ctx.beginPath(); rimPts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.stroke();
+  ctx.strokeStyle="#c79a5a"; ctx.lineWidth=1;
+  ctx.beginPath(); rimPts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.stroke();
+  const dirs=[["북 子",0],["동 卯",90],["남 午",180],["서 酉",270]];
+  ctx.font=`700 ${Math.max(10,S*0.04)}px "Noto Sans KR",sans-serif`;
+  for(const [t,a] of dirs){
+    const P=[Math.sin(a*D2R)*1.13, Math.cos(a*D2R)*1.13, 0];
+    const [x,y]=proj(P); ctx.fillStyle="#5b3e26"; ctx.fillText(t,x,y);
+  }
+
+  // 영침 그림자
+  const ax=[0,Math.cos(lat*D2R),Math.sin(lat*D2R)];
+  let tip=null;
+  if(up){
+    const shPts=[];
+    for(let k=0;k<=1.0001;k+=1/80){
+      const Q=ax.map(v=>-v*k);   // 영침: 중심 → 남쪽 아래 안쪽 벽(천구 남극 방향)
+      // |Q − tŝ| = 1, t>0
+      const b=dot(Q,sDir), c=dot(Q,Q)-1, disc=b*b-c;
+      if(disc<0){shPts.push(null);continue;}
+      const t=b+Math.sqrt(disc); if(t<=0){shPts.push(null);continue;}
+      shPts.push([Q[0]-t*sDir[0],Q[1]-t*sDir[1],Q[2]-t*sDir[2]]);
+    }
+    polyline(shPts,"rgba(40,25,15,.75)",S*0.018);
+    tip = sDir.map(v=>-v);
+  }
+
+  // 영침: 그릇 안쪽 남쪽 벽에 붙어 천구 북극을 향해 뻗고, 끝이 구 중심에 옴
+  // 그릇 안의 점 Q가 카메라에서 보이는지: 시선이 테두리 안쪽(입구)으로 빠져나가면 보임
+  ctx.lineCap="round";
+  const base = ax.map(v=>-v);   // 안쪽 벽의 고정점
+  const N=60; let prev=null;
+  for(let i=0;i<=N;i++){
+    const k=i/N, Q=ax.map(v=>-v*k), vis=seen(Q), p=proj(Q);
+    if(prev && vis && prev.vis){
+      ctx.strokeStyle="#1c120a"; ctx.lineWidth=S*(0.012+0.010*k);
+      ctx.beginPath(); ctx.moveTo(prev.p[0],prev.p[1]); ctx.lineTo(p[0],p[1]); ctx.stroke();
+    }
+    prev={p,vis};
+  }
+  if(seen(base.map(v=>v*0.999))){
+    const [px,py]=proj(base);
+    ctx.fillStyle="#3d2614"; ctx.beginPath(); ctx.arc(px,py,S*0.03,0,2*Math.PI); ctx.fill();
+  }
+  const [ox,oy]=proj([0,0,0]);
+  ctx.fillStyle="#d8b46a"; ctx.beginPath(); ctx.arc(ox,oy,S*0.012,0,2*Math.PI); ctx.fill();
+
+  // 그림자 끝
+  if(tip && visIn(tip)){
+    const [x,y]=proj(tip);
+    ctx.fillStyle="#b5452b"; ctx.beginPath(); ctx.arc(x,y,S*0.018,0,2*Math.PI); ctx.fill();
+    ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
+  }
+
+  // 태양 방향 표시 (오른쪽 위 작은 나침)
+  drawSunBadge(s, sDir);
+  updatePanel(s, sDir, curIdx);
+}
+
+function drawSunBadge(s, sDir){
+  const alt = Math.asin(sDir[2])*R2D;
+  let az = Math.atan2(sDir[0], sDir[1])*R2D; az=(az+360)%360;
+  const x=14, y=14;
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  ctx.fillStyle = alt>0 ? "#e09a2b" : "#9a9a9a";
+  ctx.beginPath(); ctx.arc(x+12,y+12,10,0,2*Math.PI); ctx.fill();
+  ctx.fillStyle="#3b2a1c"; ctx.font="500 13px 'Noto Sans KR',sans-serif";
+  ctx.fillText(`태양 고도 ${alt.toFixed(1)}°  방위 ${az.toFixed(0)}°`, x+30, y+10);
+  ctx.fillStyle="#7a6f63"; ctx.font="12px 'Noto Sans KR',sans-serif";
+  ctx.fillText(`적위 ${s.dec.toFixed(1)}°  황경 ${s.lam.toFixed(1)}°`, x+30, y+28);
+}
+
+// ---------- 패널 ----------
+const pad = n => String(n).padStart(2,"0");
+const josa = w => { const c=w.charCodeAt(w.length-1)-0xAC00; return (c>=0 && c%28)?"과":"와"; };
+function hm(minTotal){ let m=Math.round(minTotal); m=((m%1440)+1440)%1440; return `${Math.floor(m/60)}시 ${pad(m%60)}분`; }
+const sgn = v => (v>=0?"+":"−")+Math.abs(v);
+
+function updatePanel(s, sDir, curIdx){
+  const appMin = 12*60 + s.H*4;               // 시태양시 (분)
+  const lonC = Math.round((135 - state.lon)*4); // 경도 보정 (분)
+  const eotC = -Math.round(s.eot);             // 균시차 보정 (분)
+  const stdMin = Math.round(appMin) + lonC + eotC;
+  const up = sDir[2]>0;
+  const a=TERMS[curIdx], b=TERMS[(curIdx+1)%24];
+
+  $("aSol").textContent = `${a}${josa(a)} ${b} 사이 (대략 ${state.m}월 ${state.d}일)`;
+  $("aApp").textContent = up ? hm(appMin) : "해가 없어 읽을 수 없음";
+  $("aLat").textContent = state.lat.toFixed(2)+"°N";
+  $("aLon").textContent = state.lon.toFixed(2)+"°E";
+  $("aLonC").textContent = `${sgn(lonC)}분`;
+  $("aEot").textContent = `${sgn(eotC)}분  (균시차 ${s.eot>=0?"+":"−"}${Math.abs(s.eot).toFixed(1)}분)`;
+  $("aStd").textContent = up ? hm(stdMin) : "—";
+  $("aReal").textContent = `${state.m}월 ${state.d}일 ${hm(state.min)}`;
+
+  let html;
+  if(!up){
+    html = `<span class="warn">지금은 해가 지평선 아래에 있어 그림자가 생기지 않아요.</span> 시각을 낮으로 옮겨 보세요.`;
+  }else{
+    const sj = sijin(appMin/60);
+    const into = appMin - sj.base*60;
+    const gak = Math.floor(into/15);
+    html = `그림자 끝 위치: <b>${a}선과 ${b}선 사이</b>, <b>${sj.name}${gak?" "+gak+"각":""}</b> 남짓 (시태양시 ${hm(appMin)})<br>
+      보정: ${hm(appMin)} ${sgn(lonC)}분(경도) ${sgn(eotC)}분(균시차) = <b>${hm(stdMin)}</b><br>
+      실제 시계: ${hm(state.min)}`;
+  }
+  $("reading").innerHTML = html;
+  document.querySelectorAll(".ans").forEach(e=>e.classList.remove("show"));
+}
+
+// ---------- 입력 ----------
+function syncInputs(){
+  $("date").value = `${state.y}-${pad(state.m)}-${pad(state.d)}`;
+  $("time").value = state.min;
+  $("timeLbl").textContent = `${pad(Math.floor(state.min/60))}:${pad(state.min%60)}`;
+  $("lat").value = state.lat; $("lon").value = state.lon;
+}
+$("date").addEventListener("change", e=>{
+  const [y,m,d]=e.target.value.split("-").map(Number); if(!y) return;
+  Object.assign(state,{y,m,d}); draw();
+});
+$("time").addEventListener("input", e=>{ state.min=+e.target.value; syncInputs(); draw(); });
+$("lat").addEventListener("change", e=>{ const v=+e.target.value; if(v>5&&v<66){state.lat=v;} syncInputs(); draw(); });
+$("lon").addEventListener("change", e=>{ const v=+e.target.value; if(v>=-180&&v<=180){state.lon=v;} syncInputs(); draw(); });
+$("preset").addEventListener("click", ()=>{ Object.assign(state,{y:2026,m:11,d:17,min:14*60}); stop(); syncInputs(); draw(); });
+$("now").addEventListener("click", ()=>{
+  const k = new Date(Date.now()+9*3600000);
+  Object.assign(state,{y:k.getUTCFullYear(), m:k.getUTCMonth()+1, d:k.getUTCDate(), min:k.getUTCHours()*60+k.getUTCMinutes()});
+  stop(); syncInputs(); draw();
+});
+$("student").addEventListener("change", e=>document.body.classList.toggle("student", e.target.checked));
+document.querySelectorAll(".ans").forEach(el=>el.addEventListener("click",()=>el.classList.add("show")));
+
+let timer=null;
+function stop(){ if(timer){clearInterval(timer);timer=null;$("play").textContent="▶ 하루 재생";} }
+$("play").addEventListener("click", ()=>{
+  if(timer){ stop(); return; }
+  if(state.min>=1150) state.min=330;
+  $("play").textContent="❚❚ 멈춤";
+  timer=setInterval(()=>{ state.min+=4; if(state.min>1200){stop();state.min=1200;} syncInputs(); draw(); }, 40);
+});
+
+// 카메라 조작
+const cams={south:[180,52], top:[180,89], east:[90,40]};
+document.querySelectorAll("[data-cam]").forEach(b=>b.addEventListener("click",()=>{[camAz,camEl]=cams[b.dataset.cam]; draw();}));
+let drag=null;
+cv.addEventListener("pointerdown",e=>{drag=[e.clientX,e.clientY,camAz,camEl]; cv.setPointerCapture(e.pointerId);});
+cv.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  camAz = drag[2] - (e.clientX-drag[0])*0.4;
+  camEl = Math.max(8, Math.min(89, drag[3] + (e.clientY-drag[1])*0.3));
+  draw();
+});
+cv.addEventListener("pointerup",()=>drag=null);
+
+syncInputs();
+window.addEventListener("resize", resize);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+resize();
+})();
+</script>
+</body>
+</html>
